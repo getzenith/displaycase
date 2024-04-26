@@ -1,85 +1,115 @@
-// Define pin numbers for buttons and lights
-const int buttonAPin = 7;
-const int buttonBPin = 6;
-const int buttonCPin = 8;
-const int lightAPin = 13;
-const int lightBPin = 2;
-const int lightCPin = 3;
+#include "Arduino.h"
+#include <DFPlayerMini_Fast.h>
+#include <SoftwareSerial.h>
+
+enum PinConstants {
+  ButtonAPin = 2,
+  ButtonBPin = 3,
+  ButtonCPin = 4,
+  LightAPin = 5,
+  LightBPin = 6,
+  LightCPin = 7
+};
+
+enum Situation {
+  SituationA,
+  SituationB,
+  SituationC
+};
+
+const int blinkCount = 5;
+const unsigned long trackDuration = 15000;  // 15 seconds
 
 bool inputEnabled = true;
 
+SoftwareSerial softSerial(11, 10);
+DFPlayerMini_Fast myMP3;
+
 void setup() {
-  // Initialize buttons as inputs
-  pinMode(buttonAPin, INPUT_PULLUP);
-  pinMode(buttonBPin, INPUT_PULLUP);
-  pinMode(buttonCPin, INPUT_PULLUP);
-  
-  // Initialize lights as outputs
-  pinMode(lightAPin, OUTPUT);
-  pinMode(lightBPin, OUTPUT);
-  pinMode(lightCPin, OUTPUT);
-  
-  Serial.begin(9600);
-  
-  blinkAllLEDs(5); // Blink all LEDs 5 times
+  pinMode(ButtonAPin, INPUT_PULLUP);
+  pinMode(ButtonBPin, INPUT_PULLUP);
+  pinMode(ButtonCPin, INPUT_PULLUP);
+  pinMode(LightAPin, OUTPUT);
+  pinMode(LightBPin, OUTPUT);
+  pinMode(LightCPin, OUTPUT);
+  delay(100);
+  Serial.begin(115200);
+
+#if !defined(UBRR1H)
+  softSerial.begin(9600);
+  myMP3.begin(softSerial, true);
+#else
+  Serial1.begin(9600);
+  myMP3.begin(Serial1, true);
+#endif
+  myMP3.volume(30);
+
+  blinkAllLEDs(blinkCount); // Moved the blinkAllLEDs call to setup
 }
 
 void loop() {
   if (inputEnabled) {
-    if (digitalRead(buttonAPin) == LOW) {
-      situationA();
-    } else if (digitalRead(buttonBPin) == LOW) {
-      situationB();
-    } else if (digitalRead(buttonCPin) == LOW) {
-      situationC();
-    }
+    handleButtonPress();
   }
 }
 
 void blinkAllLEDs(int times) {
   for (int i = 0; i < times; i++) {
-    digitalWrite(lightAPin, HIGH);
-    digitalWrite(lightBPin, HIGH);
-    digitalWrite(lightCPin, HIGH);
+    digitalWrite(LightAPin, HIGH);
+    digitalWrite(LightBPin, HIGH);
+    digitalWrite(LightCPin, HIGH);
     delay(500);
-    digitalWrite(lightAPin, LOW);
-    digitalWrite(lightBPin, LOW);
-    digitalWrite(lightCPin, LOW);
+    digitalWrite(LightAPin, LOW);
+    digitalWrite(LightBPin, LOW);
+    digitalWrite(LightCPin, LOW);
     delay(500);
+  }
+  Serial.println("[Zenith Display] Ready");
+}
+
+void handleButtonPress() {
+  if (digitalRead(ButtonAPin) == LOW) {
+    startSituation(SituationA);
+  } else if (digitalRead(ButtonBPin) == LOW) {
+    startSituation(SituationB);
+  } else if (digitalRead(ButtonCPin) == LOW) {
+    startSituation(SituationC);
   }
 }
 
-void situationA() {
+void startSituation(Situation situation) {
   disableInputs();
-  digitalWrite(lightAPin, HIGH);
-  Serial.println("[Zenith Display] Situation A Started");
-  delay(1000); // Adjust delay time as needed
-  Serial.println("[Zenith Display] Situation A Ended");
-  digitalWrite(lightAPin, LOW);
+  int pin;
+  uint16_t trackNum;
+  switch (situation) {
+    case SituationA:
+      pin = LightAPin;
+      Serial.println("[Zenith Display] Situation A Started");
+      trackNum = 1; // Adjust track number as needed
+      myMP3.play(trackNum);
+      break;
+    case SituationB:
+      pin = LightBPin;
+      Serial.println("[Zenith Display] Situation B Started");
+      trackNum = 2; // Adjust track number as needed
+      myMP3.play(trackNum);
+      break;
+    case SituationC:
+      pin = LightCPin;
+      Serial.println("[Zenith Display] Situation C Started");
+      trackNum = 3; // Adjust track number as needed
+      myMP3.play(trackNum);
+      break;
+  }
+  digitalWrite(pin, HIGH);
+  unsigned long startTime = millis();
+  while (millis() - startTime < trackDuration) {
+    // No need to check DFPlayer's state here
+    delay(100);
+  }
+  digitalWrite(pin, LOW);
   enableInputs();
-  blinkAllLEDs(5); // Blink all LEDs 5 times
-}
-
-void situationB() {
-  disableInputs();
-  digitalWrite(lightBPin, HIGH);
-  Serial.println("[Zenith Display] Situation B Started");
-  delay(1000); // Adjust delay time as needed
-  Serial.println("[Zenith Display] Situation B Ended");
-  digitalWrite(lightBPin, LOW);
-  enableInputs();
-  blinkAllLEDs(5); // Blink all LEDs 5 times
-}
-
-void situationC() {
-  disableInputs();
-  digitalWrite(lightCPin, HIGH);
-  Serial.println("[Zenith Display] Situation C Started");
-  delay(1000); // Adjust delay time as needed
-  Serial.println("[Zenith Display] Situation C Ended");
-  digitalWrite(lightCPin, LOW);
-  enableInputs();
-  blinkAllLEDs(5); // Blink all LEDs 5 times
+  blinkAllLEDs(blinkCount);
 }
 
 void disableInputs() {
