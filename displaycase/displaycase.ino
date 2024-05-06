@@ -4,10 +4,10 @@
 
 enum PinConstants {
   ButtonAPin = 2,
-  ButtonBPin = 3,
-  ButtonCPin = 4,
-  LightAPin = 5,
-  LightBPin = 6,
+  ButtonBPin = 4,
+  ButtonCPin = 6,
+  LightAPin = 3,
+  LightBPin = 5,
   LightCPin = 7
 };
 
@@ -22,7 +22,7 @@ const unsigned long trackDuration = 15000;  // 15 seconds
 
 bool inputEnabled = true;
 
-SoftwareSerial softSerial(11, 10);
+SoftwareSerial softSerial(9, 8);
 DFPlayerMini_Fast myMP3;
 
 void setup() {
