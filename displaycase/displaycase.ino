@@ -8,7 +8,10 @@ enum PinConstants {
   ButtonCPin = 6,
   LightAPin = 3,
   LightBPin = 5,
-  LightCPin = 7
+  LightCPin = 7,
+  StreetLightAPin = 11,
+  StreetLightBPin = 12,
+  StreetLightCPin = 13
 };
 
 enum Situation {
@@ -34,6 +37,9 @@ void setup() {
   pinMode(LightAPin, OUTPUT);
   pinMode(LightBPin, OUTPUT);
   pinMode(LightCPin, OUTPUT);
+  pinMode(StreetLightAPin, OUTPUT);
+  pinMode(StreetLightBPin, OUTPUT);
+  pinMode(StreetLightCPin, OUTPUT);
   delay(100);
   Serial.begin(115200);
 
@@ -46,6 +52,7 @@ void setup() {
 #endif
   myMP3.volume(30);
 
+  turnOnAllStreetLights(); // Ensure all street lights are on by default
   blinkAllLEDs(blinkCount); // Initial blink sequence
   lastBlinkTime = millis(); // Initialize the last blink time
 }
@@ -55,7 +62,6 @@ void loop() {
     handleButtonPress();
     // Check if it's time to blink the LEDs
     if (millis() - lastBlinkTime >= blinkInterval) {
-      blinkAllLEDs(blinkCount);
       blinkAllLEDs(blinkCount);
       lastBlinkTime = millis();
     }
@@ -96,18 +102,27 @@ void startSituation(Situation situation) {
       Serial.println("[Zenith Display] Situation A Started");
       trackNum = 1; // Adjust track number as needed
       myMP3.play(trackNum);
+      digitalWrite(StreetLightAPin, HIGH);
+      digitalWrite(StreetLightBPin, LOW);
+      digitalWrite(StreetLightCPin, LOW);
       break;
     case SituationB:
       pin = LightBPin;
       Serial.println("[Zenith Display] Situation B Started");
       trackNum = 2; // Adjust track number as needed
       myMP3.play(trackNum);
+      digitalWrite(StreetLightAPin, LOW);
+      digitalWrite(StreetLightBPin, HIGH);
+      digitalWrite(StreetLightCPin, LOW);
       break;
     case SituationC:
       pin = LightCPin;
       Serial.println("[Zenith Display] Situation C Started");
       trackNum = 3; // Adjust track number as needed
       myMP3.play(trackNum);
+      digitalWrite(StreetLightAPin, LOW);
+      digitalWrite(StreetLightBPin, LOW);
+      digitalWrite(StreetLightCPin, HIGH);
       break;
   }
   digitalWrite(pin, HIGH);
@@ -117,6 +132,7 @@ void startSituation(Situation situation) {
     delay(100);
   }
   digitalWrite(pin, LOW);
+  turnOnAllStreetLights(); // Turn on all street lights after the situation ends
   enableInputs();
   lastBlinkTime = millis(); // Reset blink timer after a situation ends
 }
@@ -127,4 +143,10 @@ void disableInputs() {
 
 void enableInputs() {
   inputEnabled = true;
+}
+
+void turnOnAllStreetLights() {
+  digitalWrite(StreetLightAPin, HIGH);
+  digitalWrite(StreetLightBPin, HIGH);
+  digitalWrite(StreetLightCPin, HIGH);
 }
