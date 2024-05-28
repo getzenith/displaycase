@@ -19,8 +19,10 @@ enum Situation {
 
 const int blinkCount = 5;
 const unsigned long trackDuration = 15000;  // 15 seconds
+const unsigned long blinkInterval = 30000; // 30 seconds
 
 bool inputEnabled = true;
+unsigned long lastBlinkTime = 0;
 
 SoftwareSerial softSerial(9, 8);
 DFPlayerMini_Fast myMP3;
@@ -44,12 +46,19 @@ void setup() {
 #endif
   myMP3.volume(30);
 
-  blinkAllLEDs(blinkCount); // Moved the blinkAllLEDs call to setup
+  blinkAllLEDs(blinkCount); // Initial blink sequence
+  lastBlinkTime = millis(); // Initialize the last blink time
 }
 
 void loop() {
   if (inputEnabled) {
     handleButtonPress();
+    // Check if it's time to blink the LEDs
+    if (millis() - lastBlinkTime >= blinkInterval) {
+      blinkAllLEDs(blinkCount);
+      blinkAllLEDs(blinkCount);
+      lastBlinkTime = millis();
+    }
   }
 }
 
@@ -109,7 +118,7 @@ void startSituation(Situation situation) {
   }
   digitalWrite(pin, LOW);
   enableInputs();
-  blinkAllLEDs(blinkCount);
+  lastBlinkTime = millis(); // Reset blink timer after a situation ends
 }
 
 void disableInputs() {
