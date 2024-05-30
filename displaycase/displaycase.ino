@@ -1,6 +1,4 @@
 #include "Arduino.h"
-#include <DFPlayerMini_Fast.h>
-#include <SoftwareSerial.h>
 
 enum PinConstants {
   ButtonAPin = 2,
@@ -21,14 +19,21 @@ enum Situation {
 };
 
 const int blinkCount = 5;
-const unsigned long trackDuration = 15000;  // 15 seconds
+const unsigned long situationDuration = 15000;  // 15 seconds
 const unsigned long blinkInterval = 30000; // 30 seconds
+const unsigned long blinkDelay = 500; // 500 milliseconds
+const unsigned long flickerDelay = 250; // 250 milliseconds
 
-bool inputEnabled = true;
 unsigned long lastBlinkTime = 0;
-
-SoftwareSerial softSerial(9, 8);
-DFPlayerMini_Fast myMP3;
+unsigned long situationStartTime = 0;
+unsigned long lastBlinkStepTime = 0;
+unsigned long lastFlickerStepTime = 0;
+int blinkStep = 0;
+int flickerStep = 0;
+bool inSituation = false;
+bool blinking = false;
+bool flickering = false;
+Situation currentSituation;
 
 void setup() {
   pinMode(ButtonAPin, INPUT_PULLUP);
@@ -43,43 +48,64 @@ void setup() {
   delay(100);
   Serial.begin(115200);
 
-#if !defined(UBRR1H)
-  softSerial.begin(9600);
-  myMP3.begin(softSerial, true);
-#else
-  Serial1.begin(9600);
-  myMP3.begin(Serial1, true);
-#endif
-  myMP3.volume(30);
-
   turnOnAllStreetLights(); // Ensure all street lights are on by default
-  blinkAllLEDs(blinkCount); // Initial blink sequence
+  turnOnAllButtonLights(); // Ensure all button lights are on by default
+  startBlinking(blinkCount); // Initial blink sequence
   lastBlinkTime = millis(); // Initialize the last blink time
 }
 
 void loop() {
-  if (inputEnabled) {
-    handleButtonPress();
+  handleButtonPress();
+
+  if (inSituation) {
+    // If in a situation, check if the duration has passed
+    if (millis() - situationStartTime >= situationDuration) {
+      endSituation();
+    }
+  } else {
     // Check if it's time to blink the LEDs
     if (millis() - lastBlinkTime >= blinkInterval) {
-      blinkAllLEDs(blinkCount);
+      startBlinking(blinkCount);
       lastBlinkTime = millis();
     }
   }
+
+  // Handle non-blocking blinking
+  if (blinking) {
+    handleBlinking();
+  }
+
+  // Handle non-blocking flickering
+  if (flickering) {
+    handleFlickering();
+  }
 }
 
-void blinkAllLEDs(int times) {
-  for (int i = 0; i < times; i++) {
-    digitalWrite(LightAPin, HIGH);
-    digitalWrite(LightBPin, HIGH);
-    digitalWrite(LightCPin, HIGH);
-    delay(500);
-    digitalWrite(LightAPin, LOW);
-    digitalWrite(LightBPin, LOW);
-    digitalWrite(LightCPin, LOW);
-    delay(500);
+void startBlinking(int times) {
+  blinking = true;
+  blinkStep = 0;
+}
+
+void handleBlinking() {
+  if (millis() - lastBlinkStepTime >= blinkDelay) {
+    if (blinkStep % 2 == 0) {
+      digitalWrite(LightAPin, LOW);
+      digitalWrite(LightBPin, LOW);
+      digitalWrite(LightCPin, LOW);
+    } else {
+      digitalWrite(LightAPin, HIGH);
+      digitalWrite(LightBPin, HIGH);
+      digitalWrite(LightCPin, HIGH);
+    }
+
+    blinkStep++;
+    lastBlinkStepTime = millis();
+
+    if (blinkStep >= blinkCount * 2) {
+      blinking = false;
+      Serial.println("[Zenith Display] Ready");
+    }
   }
-  Serial.println("[Zenith Display] Ready");
 }
 
 void handleButtonPress() {
@@ -93,56 +119,90 @@ void handleButtonPress() {
 }
 
 void startSituation(Situation situation) {
-  disableInputs();
+  currentSituation = situation;
+  inSituation = true;
+  situationStartTime = millis();
+
   int pin;
-  uint16_t trackNum;
   switch (situation) {
     case SituationA:
       pin = LightAPin;
       Serial.println("[Zenith Display] Situation A Started");
-      trackNum = 1; // Adjust track number as needed
-      myMP3.play(trackNum);
-      digitalWrite(StreetLightAPin, HIGH);
-      digitalWrite(StreetLightBPin, LOW);
-      digitalWrite(StreetLightCPin, LOW);
       break;
     case SituationB:
       pin = LightBPin;
       Serial.println("[Zenith Display] Situation B Started");
-      trackNum = 2; // Adjust track number as needed
-      myMP3.play(trackNum);
-      digitalWrite(StreetLightAPin, LOW);
-      digitalWrite(StreetLightBPin, HIGH);
-      digitalWrite(StreetLightCPin, LOW);
       break;
     case SituationC:
       pin = LightCPin;
       Serial.println("[Zenith Display] Situation C Started");
-      trackNum = 3; // Adjust track number as needed
-      myMP3.play(trackNum);
-      digitalWrite(StreetLightAPin, LOW);
-      digitalWrite(StreetLightBPin, LOW);
-      digitalWrite(StreetLightCPin, HIGH);
       break;
   }
+
+  // Turn off all button lights and turn on the respective button light instantly
+  turnOffAllButtonLights();
   digitalWrite(pin, HIGH);
-  unsigned long startTime = millis();
-  while (millis() - startTime < trackDuration) {
-    // No need to check DFPlayer's state here
-    delay(100);
-  }
-  digitalWrite(pin, LOW);
+
+  // Start flickering all street lights before activating the specific one
+  startFlickering();
+}
+
+void endSituation() {
+  inSituation = false;
   turnOnAllStreetLights(); // Turn on all street lights after the situation ends
-  enableInputs();
-  lastBlinkTime = millis(); // Reset blink timer after a situation ends
+  turnOnAllButtonLights(); // Turn on all button lights after the situation ends
+  Serial.println("[Zenith Display] Situation Ended");
 }
 
-void disableInputs() {
-  inputEnabled = false;
+void startFlickering() {
+  flickering = true;
+  flickerStep = 0;
 }
 
-void enableInputs() {
-  inputEnabled = true;
+void handleFlickering() {
+  if (millis() - lastFlickerStepTime >= flickerDelay) {
+    if (flickerStep % 2 == 0) {
+      digitalWrite(StreetLightAPin, HIGH);
+      digitalWrite(StreetLightBPin, HIGH);
+      digitalWrite(StreetLightCPin, HIGH);
+    } else {
+      digitalWrite(StreetLightAPin, LOW);
+      digitalWrite(StreetLightBPin, LOW);
+      digitalWrite(StreetLightCPin, LOW);
+    }
+
+    flickerStep++;
+    lastFlickerStepTime = millis();
+
+    if (flickerStep >= 6) {
+      flickering = false;
+      turnOnSituationStreetLight();
+    }
+  }
+}
+
+void turnOnSituationStreetLight() {
+  // Ensure all street lights are off
+  digitalWrite(StreetLightAPin, LOW);
+  digitalWrite(StreetLightBPin, LOW);
+  digitalWrite(StreetLightCPin, LOW);
+
+  // Turn on the specific street light for the current situation
+  if (currentSituation == SituationA) digitalWrite(StreetLightAPin, HIGH);
+  if (currentSituation == SituationB) digitalWrite(StreetLightBPin, HIGH);
+  if (currentSituation == SituationC) digitalWrite(StreetLightCPin, HIGH);
+}
+
+void turnOnAllButtonLights() {
+  digitalWrite(LightAPin, HIGH);
+  digitalWrite(LightBPin, HIGH);
+  digitalWrite(LightCPin, HIGH);
+}
+
+void turnOffAllButtonLights() {
+  digitalWrite(LightAPin, LOW);
+  digitalWrite(LightBPin, LOW);
+  digitalWrite(LightCPin, LOW);
 }
 
 void turnOnAllStreetLights() {
